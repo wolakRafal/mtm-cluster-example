@@ -83,9 +83,31 @@ abstract class NCClusterSpec extends MultiNodeSpec(NCClusterSpec)
       }
     }
 
-    "illustrate how more nodes registers" in within(20 seconds) {
+    "illustrate how more nodes registers 3 x 3" in within(20 seconds) {
 
     }
+
+    "illustrate how to install Adaptor in Med tier" in within(20 seconds) {
+
+    }
+
+    "illustrate how to install many adaptor instances on each Med Tier" in within(20 seconds) {
+
+    }
+
+
+
+  }
+
+  "The MTM " must {
+    "Illustrate Stable Hashing routing to adaptors" in within(20 seconds) {
+
+    }
+
+    "Illustrate round robin routing to adaptors" in within(20 seconds) {
+
+    }
+
 
 
   }

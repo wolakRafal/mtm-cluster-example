@@ -9,5 +9,8 @@ object Messages {
 
   final case class NoAdaptors(meSelf: String, reason: String)
 
+  /** Adaptor uses this message to announce himself to adaptor framework **/
+  final case class Announce(neType: String)
+
 
 }
