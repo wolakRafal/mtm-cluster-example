@@ -1,8 +1,10 @@
-import akka.actor.Props
+import akka.actor.{RootActorPath, Props}
 import akka.cluster.Cluster
 import akka.remote.testkit.{MultiNodeConfig, MultiNodeSpec}
 import akka.testkit.ImplicitSender
+import app.tier.MTM
 import com.typesafe.config.ConfigFactory
+import med.tier.{AdaptorFWK, Adaptor}
 import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
 
 import scala.concurrent.duration._
@@ -59,6 +61,7 @@ abstract class NCClusterSpec extends MultiNodeSpec(NCClusterSpec)
     "illustrate how to start first app tier node" in within(15 seconds) {
       runOn(app1) {
         Cluster(system) join node(app1).address
+
         val mtmActor = system.actorOf(Props[MTM], name = "MTM")
         mtmActor ! GetAdaptorAddress("/non/existent/me/address")
         expectMsgPF() {
@@ -74,12 +77,23 @@ abstract class NCClusterSpec extends MultiNodeSpec(NCClusterSpec)
     "illustrate how a med tier node automatically registers" in within(15 seconds) {
       runOn(med1) {
         Cluster(system) join node(app1).address
+
         system.actorOf(Props[AdaptorFWK], name = "adaptor-framework")
+        system.actorOf(Adaptor.props("f8"), name = "adaptor-f8")
+        system.actorOf(Adaptor.props("f7"), name = "adaptor-f7")
+        system.actorOf(Adaptor.props("f16"), name = "adaptor-f16")
       }
       testConductor.enter("med1-started")
 
       runOn(app1) {
-
+        system.actorSelection(RootActorPath(node(app1).address) / "usr" / "MTM") ! GetAllAdaptors
+        expectMsgPF() {
+          case AllAdaptors(adaptorsMap) =>
+            adaptorsMap should have size 3
+            adaptorsMap.keys should contain "f8"
+            adaptorsMap.keys should contain "f7"
+            adaptorsMap.keys should contain "f16"
+        }
       }
     }
 
@@ -107,7 +121,6 @@ abstract class NCClusterSpec extends MultiNodeSpec(NCClusterSpec)
     "Illustrate round robin routing to adaptors" in within(20 seconds) {
 
     }
-
 
 
   }

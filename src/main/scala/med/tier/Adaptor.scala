@@ -1,6 +1,8 @@
+package med.tier
+
 import java.util.UUID
 
-import Messages.Announce
+import _root_.Messages.Announce
 import akka.actor.{Actor, Props}
 
 import scala.concurrent.duration._
