@@ -20,18 +20,19 @@ val project = Project(
       "com.typesafe.akka" %% "akka-remote" % akkaVersion,
       "com.typesafe.akka" %% "akka-cluster-sharding" % akkaVersion,
       "com.typesafe.akka" %% "akka-cluster" % akkaVersion,
-      "com.typesafe.akka" %% "akka-cluster-metrics" % akkaVersion,
+//      "com.typesafe.akka" %% "akka-cluster-metrics" % akkaVersion,
       "com.typesafe.akka" %% "akka-cluster-tools" % akkaVersion,
       "com.typesafe.akka" %% "akka-multi-node-testkit" % akkaVersion,
-      "org.iq80.leveldb" % "leveldb" % "0.7", // for BlogApp
-      "org.fusesource.leveldbjni" % "leveldbjni-all" % "1.8", // for BlogApp
+//      "org.iq80.leveldb" % "leveldb" % "0.7", // for BlogApp
+//      "org.fusesource.leveldbjni" % "leveldbjni-all" % "1.8", // for BlogApp
       "org.scalatest" %% "scalatest" % "2.2.1" % "test",
-      "commons-io" % "commons-io" % "2.4" % "test",
-      "io.kamon" % "sigar-loader" % "1.6.6-rev002"),
+      "commons-io" % "commons-io" % "2.4" % "test"
+//      "io.kamon" % "sigar-loader" % "1.6.6-rev002"
+      ),
     javaOptions in run ++= Seq(
       "-Xms128m", "-Xmx1024m", "-Djava.library.path=./target/native"),
     Keys.fork in run := true,
-    mainClass in (Compile, run) := Some("sample.cluster.simple.SimpleClusterApp"),
+//    mainClass in (Compile, run) := Some("sample.cluster.simple.SimpleClusterApp"),
     // make sure that MultiJvm test are compiled by the default test compilation
     compile in MultiJvm <<= (compile in MultiJvm) triggeredBy (compile in Test),
     // disable parallel tests

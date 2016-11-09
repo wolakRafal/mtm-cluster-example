@@ -1,18 +1,19 @@
 package app.tier
 
-import _root_.Events.{NCEvent, NewAdaptor}
-import _root_.Messages.{AllAdaptors, GetAdaptorAddress, GetAllAdaptors}
+import common.{Messages, Events}
+import Events.{NCEvent, NewAdaptor}
+import Messages.{AllAdaptors, GetAdaptorAddress, GetAllAdaptors}
 import akka.actor.{Actor, ActorLogging, ActorRef}
 import akka.cluster.Cluster
 import akka.cluster.ClusterEvent._
 import akka.cluster.pubsub.DistributedPubSub
-import med.tier.EventManager
+import med.tier.AdaptorFWK
 
 //object MTM {
 //  def props =  ???
 //}
 
-class MTM extends Actor with ActorLogging with ClusterEventSubscriber {
+class MTM extends Actor with ActorLogging {
 
   val cluster = Cluster(context.system)
 
@@ -22,14 +23,26 @@ class MTM extends Actor with ActorLogging with ClusterEventSubscriber {
   /** key=meSelf , value=AdaptorAddress */
   var routingTable = Map.empty[String, ActorRef]
 
+  var subscribed = false
+
+  import akka.cluster.pubsub.DistributedPubSubMediator.{Subscribe, SubscribeAck}
+  val mediator = DistributedPubSub(context.system).mediator
+
   // subscribe to cluster changes
   override def preStart(): Unit = {
+    // subscribe to the topic named "content"
+    mediator ! Subscribe(AdaptorFWK.TopicName, self)
+
     cluster.subscribe(self, initialStateMode = InitialStateAsEvents, classOf[MemberEvent], classOf[UnreachableMember])
   }
 
   override def postStop(): Unit = cluster.unsubscribe(self)
 
-  override def receive: Actor.Receive = mtmApi orElse mtmApi
+  override def receive: Actor.Receive = mtmApi orElse clusterListener orElse eventsReceive
+
+  override def unhandled(msg: Any): Unit = {
+    println(" MTM Received unhandled message" + msg)
+  }
 
   def mtmApi: Receive = {
     case GetAllAdaptors =>
@@ -55,7 +68,15 @@ class MTM extends Actor with ActorLogging with ClusterEventSubscriber {
       log.info(s"Member event: $me")
   }
 
-  override def handleEvent(evt: NCEvent): Unit = {
+  def eventsReceive: Receive = {
+    case evt: NCEvent =>
+      log.info("Got Event {}", evt)
+      handleEvent(evt)
+    case SubscribeAck(Subscribe(AdaptorFWK.TopicName, None, _)) ⇒
+      log.info("----------------------------->subscribing to " + AdaptorFWK.TopicName)
+  }
+
+  def handleEvent(evt: NCEvent): Unit = evt match {
     case evt@NewAdaptor(neType, address) =>
       log.info(s"MTM receive event $evt ")
       adaptors += (neType -> List(address))
@@ -73,7 +94,7 @@ trait ClusterEventSubscriber { this: Actor with ActorLogging =>
   val mediator = DistributedPubSub(context.system).mediator
 
   // subscribe to the topic named "content"
-  mediator ! Subscribe(EventManager.TopicName, self)
+  mediator ! Subscribe(AdaptorFWK.TopicName, self)
 
   def handleEvent(evt : NCEvent): Unit
 
@@ -81,7 +102,7 @@ trait ClusterEventSubscriber { this: Actor with ActorLogging =>
     case evt: NCEvent =>
       log.info("Got Event {}", evt)
       handleEvent(evt)
-    case SubscribeAck(Subscribe("content", None, `self`)) ⇒
-      log.info("subscribing to " + EventManager.TopicName)
+    case SubscribeAck(Subscribe(AdaptorFWK.TopicName, None, _)) ⇒
+      log.info("subscribing to " + AdaptorFWK.TopicName)
   }
 }

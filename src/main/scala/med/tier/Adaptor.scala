@@ -2,8 +2,11 @@ package med.tier
 
 import java.util.UUID
 
-import _root_.Messages.Announce
-import akka.actor.{Actor, Props}
+import akka.io.Tcp
+import akka.routing.ActorSelectionRoutee
+import common.Messages
+import Messages.Announce
+import akka.actor._
 
 import scala.concurrent.duration._
 
@@ -19,14 +22,17 @@ object Adaptor {
   val DefaultNEId = "/mit/md/1111111/me/1111111"
 }
 
-class Adaptor(neType: String) extends Actor {
+class Adaptor(neType: String) extends Actor with ActorLogging {
 
   import Adaptor._
+
+  implicit val ec = context.dispatcher
 
   val tickTask = context.system.scheduler.schedule(3.seconds, 3.seconds, self, Tick)
 
   override def preStart(): Unit = {
-    context.actorSelection(self.path.parent / AdaptorFWK.ActorName) ! Announce(neType)
+    val adaptorFwk = context.system.actorSelection("/user/adaptor-fwk")
+    adaptorFwk ! Announce(neType)
   }
 
   override def postStop(): Unit = {

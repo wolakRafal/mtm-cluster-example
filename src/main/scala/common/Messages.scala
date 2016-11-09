@@ -1,3 +1,5 @@
+package common
+
 import akka.actor.ActorRef
 
 object Messages {
