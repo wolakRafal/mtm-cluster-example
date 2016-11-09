@@ -17,5 +17,6 @@ object Messages {
   /** Adaptor uses this message to announce himself to adaptor framework **/
   final case class Announce(neType: String)
 
+  final case class GlobalRoutingTable(routingTable: Map[String, ActorRef])
 
 }

@@ -130,19 +130,16 @@ abstract class NCCluster extends MultiNodeSpec(NCCluster)
 
     }
 
-    "illustrate how to install Adaptor in Med tier" in within(20.seconds) {
-
-    }
-
-    "illustrate how to install many adaptor instances on each Med Tier" in within(20.seconds) {
-
-    }
-
-
 
   }
 
   "The MTM " must {
+
+    "support bind and unbind operation" in within(30.seconds) {
+
+    }
+
+
     "Illustrate Stable Hashing routing to adaptors" in within(20.seconds) {
 
     }
