@@ -2,16 +2,12 @@ package app.tier
 
 import common.{Events, Messages}
 import Events.{NCEvent, NewAdaptor}
-import Messages.{AllAdaptors, GetAdaptorAddress, GetAllAdaptors, GlobalRoutingTable}
+import Messages.{AllAdaptors, GetAdaptorAddress, GetAllAdaptors, GlobalRoutingState}
 import akka.actor.{Actor, ActorLogging, ActorRef, RootActorPath}
 import akka.cluster.Cluster
 import akka.cluster.ClusterEvent._
 import akka.cluster.pubsub.DistributedPubSub
 import med.tier.AdaptorFWK
-
-//object MTM {
-//  def props =  ???
-//}
 
 class MTM extends Actor with ActorLogging {
 
@@ -34,14 +30,23 @@ class MTM extends Actor with ActorLogging {
     mediator ! Subscribe(AdaptorFWK.TopicName, self)
 
     cluster.subscribe(self, initialStateMode = InitialStateAsEvents, classOf[MemberEvent], classOf[UnreachableMember])
+
+    log.info("MTM is STARTED...")
   }
 
   override def postStop(): Unit = cluster.unsubscribe(self)
 
-  override def receive: Actor.Receive = mtmApi orElse clusterListener orElse eventsReceive
+  override def receive: Actor.Receive = mtmApi orElse clusterListener orElse mtmInternalCommunication orElse eventsReceive
 
   override def unhandled(msg: Any): Unit = {
     println(" MTM Received unhandled message" + msg)
+  }
+
+  /** @return true if this node is a leader in group app-tier; false otherwise */
+  def imALeader(): Boolean = {
+    val roleLeader = cluster.state.roleLeader("app-tier")
+    log.info("Role Leader" + roleLeader)
+    if (roleLeader.isDefined) roleLeader.get == cluster.selfAddress else false
   }
 
   def mtmApi: Receive = {
@@ -52,15 +57,21 @@ class MTM extends Actor with ActorLogging {
       sender() ! "NOT IMPLEMENTED"
   }
 
+  def mtmInternalCommunication: Receive = {
+    case state@GlobalRoutingState(adaptorsState, routingTableState) =>
+      log.info(s"Receiving global routing state=$state from=${sender()}")
+      adaptors = adaptorsState
+      routingTable = routingTableState
+  }
+
   def clusterListener: Receive = {
     case MemberUp(member) =>
-      member.status
       log.info("Member is Up: {}", member.address)
-      if (member.hasRole("app-tier")) {
-        // check if can use gossip protocol for this
 
-        // use Vector Clocks
-        context.system.actorSelection(RootActorPath(member.address) / "user" / "MTM") ! GlobalRoutingTable(routingTable)
+      if (member.hasRole("app-tier") && imALeader()) {
+        val state = GlobalRoutingState(adaptors, routingTable)
+        log.info(s"I'm a leader. Sending routing state=$state to the new member=${member.address}")
+        context.system.actorSelection(RootActorPath(member.address) / "user" / "MTM") ! GlobalRoutingState(adaptors, routingTable)
       }
 
       // it can be role med-tier and role app-tier. if app-tier send state
