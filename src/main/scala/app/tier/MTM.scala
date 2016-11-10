@@ -1,15 +1,18 @@
 package app.tier
 
 import common.{Events, Messages}
-import Events.{NCEvent, NewAdaptor}
-import Messages.{AllAdaptors, GetAdaptorAddress, GetAllAdaptors, GlobalRoutingState}
+import common.Events._
+import common.Messages._
 import akka.actor.{Actor, ActorLogging, ActorRef, RootActorPath}
 import akka.cluster.Cluster
 import akka.cluster.ClusterEvent._
 import akka.cluster.pubsub.DistributedPubSub
 import med.tier.AdaptorFWK
 
+
 class MTM extends Actor with ActorLogging {
+
+  val queueName: String = "DefaultQueueName"
 
   val cluster = Cluster(context.system)
 
@@ -19,14 +22,12 @@ class MTM extends Actor with ActorLogging {
   /** key=meSelf , value=AdaptorAddress */
   var routingTable = Map.empty[String, ActorRef]
 
-  var subscribed = false
-
   import akka.cluster.pubsub.DistributedPubSubMediator.{Subscribe, SubscribeAck}
   val mediator = DistributedPubSub(context.system).mediator
 
   // subscribe to cluster changes
   override def preStart(): Unit = {
-    // subscribe to the topic named "content"
+    // subscribe to the common topic named "content"
     mediator ! Subscribe(AdaptorFWK.TopicName, self)
 
     cluster.subscribe(self, initialStateMode = InitialStateAsEvents, classOf[MemberEvent], classOf[UnreachableMember])
@@ -54,7 +55,18 @@ class MTM extends Actor with ActorLogging {
       sender() ! AllAdaptors(adaptors)
 
     case GetAdaptorAddress(meSelf) =>
-      sender() ! "NOT IMPLEMENTED"
+      if (routingTable contains meSelf) {
+        sender() ! AdaptorAddress(meSelf, routingTable(meSelf))
+      } else {
+        sender() ! NoAdaptors
+      }
+
+    case CreateMe(neId, neType) =>
+      val adaptor = adaptors(neType).head
+      adaptor ! BindNe(neId, queueName)
+    case DeleteMe(neId) =>
+      val adaptorAddress = routingTable(neId)
+      adaptorAddress ! UnbindNe(neId)
   }
 
   def mtmInternalCommunication: Receive = {
@@ -62,12 +74,12 @@ class MTM extends Actor with ActorLogging {
       log.info(s"Receiving global routing state=$state from=${sender()}")
       adaptors = adaptorsState
       routingTable = routingTableState
+
   }
 
   def clusterListener: Receive = {
     case MemberUp(member) =>
       log.info("Member is Up: {}", member.address)
-
       if (member.hasRole("app-tier") && imALeader()) {
         val state = GlobalRoutingState(adaptors, routingTable)
         log.info(s"I'm a leader. Sending routing state=$state to the new member=${member.address}")
@@ -89,16 +101,24 @@ class MTM extends Actor with ActorLogging {
 
   def eventsReceive: Receive = {
     case evt: NCEvent =>
-      log.info("Got Event {}", evt)
+      log.info(s"MTM receive event $evt ")
       handleEvent(evt)
     case SubscribeAck(Subscribe(AdaptorFWK.TopicName, None, _)) ⇒
-      log.info("----------------------------->subscribing to " + AdaptorFWK.TopicName)
+      log.info("MTM subscribing to " + AdaptorFWK.TopicName)
   }
 
   def handleEvent(evt: NCEvent): Unit = evt match {
     case evt@NewAdaptor(neType, address) =>
-      log.info(s"MTM receive event $evt ")
       adaptors += (neType -> List(address))
+    case AdaptorRemoved(neType, adaptorAddress) =>
+      adaptors -= neType
+      // Right now we flush routing table
+      routingTable = routingTable.filterNot(_._2 == adaptorAddress)
+      // TBD: Leader heve to migrate all MEs to other adaptor instances in cluster
+    case evt@NeBounded(neId, neType, adaptor) =>
+      routingTable += (neId -> adaptor)
+    case evt@NeUnBounded(neId, adaptor) =>
+      routingTable -= neId
   }
 }
 
@@ -107,21 +127,3 @@ class MTM extends Actor with ActorLogging {
 // Successful Subscribe and Unsubscribe is acknowledged with DistributedPubSubMediator.SubscribeAck
 // and DistributedPubSubMediator.UnsubscribeAck replies.
 // The acknowledgment means that the subscription is registered, but it can still take some time until it is replicated to other nodes.
-trait ClusterEventSubscriber { this: Actor with ActorLogging =>
-
-  import akka.cluster.pubsub.DistributedPubSubMediator.{Subscribe, SubscribeAck}
-  val mediator = DistributedPubSub(context.system).mediator
-
-  // subscribe to the topic named "content"
-  mediator ! Subscribe(AdaptorFWK.TopicName, self)
-
-  def handleEvent(evt : NCEvent): Unit
-
-  def eventsReceive: Receive = {
-    case evt: NCEvent =>
-      log.info("Got Event {}", evt)
-      handleEvent(evt)
-    case SubscribeAck(Subscribe(AdaptorFWK.TopicName, None, _)) ⇒
-      log.info("subscribing to " + AdaptorFWK.TopicName)
-  }
-}
